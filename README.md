@@ -1,6 +1,10 @@
 # MonkeGUI
 
-Lightweight animated immediate-mode GUI framework for Unreal Engine canvas rendering. Inspired by [Dear ImGui](https://github.com/ocornut/imgui), built entirely on `UCanvas` with no external GUI dependencies.
+Lightweight animated immediate-mode GUI framework for Unreal Engine canvas rendering platform agnostic.
+
+This is a mobile friendly fork of the original, Windows only [MonkeGUI](https://github.com/monkelmaoooo/MonkeGUI).
+
+Inspired by [Dear ImGui](https://github.com/ocornut/imgui), built entirely on `UCanvas` with no external GUI dependencies.
 
 For full API reference, see [DOCUMENTATION.md](DOCUMENTATION.md)
 
