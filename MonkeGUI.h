@@ -1,49 +1,36 @@
 ﻿#pragma once
 
-#include "MonkeInput.h"
-#include <Windows.h>
-#include <cstring>
-#include <cwchar>
+#include "CoreMinimal.h"
+#include "Engine/Canvas.h"
+#include "Engine/Font.h"
+#include "Engine/Texture.h"
+#include <cmath>
+#include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
 #include <algorithm>
 #include <vector>
 #include <string>
 
 namespace MonkeGUI
 {
-    static const wchar_t* s2wc_safe(const char* c, int& outLen)
-    {
-        static thread_local wchar_t buf[1024];
-        buf[0] = L'\0';
-        outLen = 1;
-
-        if (!c) return buf;
-
-        size_t inLen = std::strlen(c);
-        if (inLen > 1023) inLen = 1023;
-
-        std::mbstowcs(buf, c, inLen);
-        buf[inLen] = L'\0';
-
-        outLen = (int)std::wcslen(buf) + 1;
-        return buf;
-    }
-
-
     static inline float srgb_to_linear(float c)
     {
         if (c <= 0.04045f) return c / 12.92f;
-        return powf((c + 0.055f) / 1.055f, 2.4f);
+        return std::pow((c + 0.055f) / 1.055f, 2.4f);
     }
 
-    static inline SDK::FLinearColor SRGB(int r, int g, int b, int a = 255)
+
+    static inline FLinearColor SRGB(int r, int g, int b, int a = 255)
     {
         const float rf = (float)r / 255.0f;
         const float gf = (float)g / 255.0f;
         const float bf = (float)b / 255.0f;
         const float af = (float)a / 255.0f;
 
-        SDK::FLinearColor out;
+        FLinearColor out;
         out.R = srgb_to_linear(rf);
         out.G = srgb_to_linear(gf);
         out.B = srgb_to_linear(bf);
@@ -53,16 +40,16 @@ namespace MonkeGUI
 
     namespace Style
     {
-        inline float TitleH = 22.f;
-        inline FVector2D Pad = FVector2D{ 8.f, 8.f };
-        inline float ItemSpacingY = 4.f;
-        inline float TextLineH = 16.f;
-        inline float FrameH = 18.f;
+        inline float TitleH = 48.f;
+        inline FVector2D Pad = FVector2D{ 12.f, 12.f };
+        inline float ItemSpacingY = 8.f;
+        inline float TextLineH = 24.f;
+        inline float FrameH = 44.f;
         inline float FrameR = 0.f;
         inline float BorderT = 1.f;
-        inline float FontSize = 13.f;
-        inline float TextOffsetY = 2.f;
-        inline float RowH = 18.f;
+        inline float FontSize = 18.f;
+        inline float TextOffsetY = 8.f;
+        inline float RowH = 44.f;
 
         inline float LabelW = 120.f;
 
@@ -163,6 +150,8 @@ namespace MonkeGUI
     static UFont* Font = nullptr;
 
     static FVector2D Mouse{ 0.f, 0.f };
+    static FVector2D PointerPosition{ 0.f, 0.f };
+    static bool PointerDown = false;
     static bool MouseDown = false;
     static bool MouseClicked = false;
     static bool MouseReleased = false;
@@ -195,6 +184,32 @@ namespace MonkeGUI
 
     static inline void SetWhiteTexture(UTexture* T) { WhiteTex = T; }
     static inline void SetFont(UFont* F) { Font = F; }
+    static inline void SetPointerState(const FVector2D& position, bool isDown)
+    {
+        PointerPosition = position;
+        PointerDown = isDown;
+    }
+    static inline void SetPointerState(float x, float y, bool isDown)
+    {
+        SetPointerState(FVector2D{ x, y }, isDown);
+    }
+
+    static std::string PendingTextInput;
+    static int PendingBackspaces = 0;
+    static bool PendingEscape = false;
+
+    static inline void QueueTextInput(const char* utf8Text)
+    {
+        if (utf8Text) PendingTextInput += utf8Text;
+    }
+    static inline void QueueTextBackspace() { ++PendingBackspaces; }
+    static inline void QueueTextEscape() { PendingEscape = true; }
+    static inline void ClearQueuedTextInput()
+    {
+        PendingTextInput.clear();
+        PendingBackspaces = 0;
+        PendingEscape = false;
+    }
 
     struct PopupState
     {
@@ -298,7 +313,7 @@ namespace MonkeGUI
 
             for (auto& f : g_snow)
             {
-                const float sway = std::sinf(t * 0.8f + f.phase) * 8.0f;
+                const float sway = std::sin(t * 0.8f + f.phase) * 8.0f;
                 f.y += f.vy * dt;
                 f.x += (f.vx + sway * 0.05f) * dt;
 
@@ -383,30 +398,19 @@ namespace MonkeGUI
         };
     }
 
-    static inline FVector2D GetMousePos_Client()
-    {
-        POINT p{};
-        GetCursorPos(&p);
-        HWND hwnd = GetForegroundWindow();
-        if (hwnd) ScreenToClient(hwnd, &p);
-        return FVector2D{ (float)p.x, (float)p.y };
-    }
-
     static inline float PowfSafe(float x, float p)
     {
         x = Clamp01(x);
-        return powf(x, p);
+        return std::pow(x, p);
     }
 
 
     static inline void UpdateMouse()
     {
-        Mouse = GetMousePos_Client();
-
-        bool down = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
-        MouseClicked = down && !MouseDown;
-        MouseReleased = !down && MouseDown;
-        MouseDown = down;
+        Mouse = PointerPosition;
+        MouseClicked = PointerDown && !MouseDown;
+        MouseReleased = !PointerDown && MouseDown;
+        MouseDown = PointerDown;
 
         Hot = -1;
     }
@@ -704,12 +708,12 @@ namespace MonkeGUI
             float w = 1.f;
             if (featherOutsideOnly)
             {
-                w = powf(1.0f - t, alphaGamma);
+                w = std::pow(1.0f - t, alphaGamma);
             }
             else
             {
                 const float d = fabsf(t - 0.5f) * 2.0f;
-                w = powf(1.0f - d, alphaGamma);
+                w = std::pow(1.0f - d, alphaGamma);
             }
 
             const float thick = thicknessPx + thicknessBoostMax * t;
@@ -796,12 +800,11 @@ namespace MonkeGUI
     {
         if (!Canvas || !Font || !txt) return;
 
-        int len = 0;
-        const wchar_t* w = s2wc_safe(txt, len);
+        const FString text(UTF8_TO_TCHAR(txt));
 
         Canvas->K2_DrawText(
             Font,
-            FString((const TCHAR*)w),
+            text,
             pos,
             FVector2D(1.0f, 1.0f),
             col,
@@ -1032,13 +1035,25 @@ namespace MonkeGUI
         if (!open || !Canvas || !pos || !size) { InWindow = false; return false; }
 
         InWindow = true;
-        WinPos = *pos;
 
         const float titleH = Style::TitleH;
         const bool haveCollapse = (collapsed != nullptr);
         const bool isCollapsed = (haveCollapse && *collapsed);
 
-        FullSize = *size;
+        const float viewportW = std::max(0.f, Canvas->SizeX);
+        const float viewportH = std::max(0.f, Canvas->SizeY);
+        const float maxW = std::max(0.f, viewportW - 2.f * Style::Pad.X);
+        const float maxH = std::max(0.f, viewportH - 2.f * Style::Pad.Y);
+        const float minW = std::min(MinWinW, maxW);
+        const float minH = std::min(MinWinH, maxH);
+        FullSize = FVector2D{
+            std::clamp(size->X, minW, maxW),
+            std::clamp(size->Y, minH, maxH)
+        };
+        WinPos = FVector2D{
+            std::clamp(pos->X, 0.f, std::max(0.f, viewportW - FullSize.X)),
+            std::clamp(pos->Y, 0.f, std::max(0.f, viewportH - FullSize.Y))
+        };
 
         FVector2D drawSize = isCollapsed ? FVector2D{ FullSize.X, titleH } : FullSize;
         WinSize = drawSize;
@@ -1071,8 +1086,8 @@ namespace MonkeGUI
             FVector2D delta{ Mouse.X - ResizeStartMouse.X, Mouse.Y - ResizeStartMouse.Y };
             FVector2D newSize{ ResizeStartSize.X + delta.X, ResizeStartSize.Y + delta.Y };
 
-            if (newSize.X < MinWinW) newSize.X = MinWinW;
-            if (newSize.Y < MinWinH) newSize.Y = MinWinH;
+            newSize.X = std::clamp(newSize.X, minW, maxW);
+            newSize.Y = std::clamp(newSize.Y, minH, maxH);
 
             *size = newSize;
             FullSize = newSize;
@@ -1095,7 +1110,10 @@ namespace MonkeGUI
 
         if (Dragging)
         {
-            WinPos = FVector2D{ Mouse.X - DragOff.X, Mouse.Y - DragOff.Y };
+            WinPos = FVector2D{
+                std::clamp(Mouse.X - DragOff.X, 0.f, std::max(0.f, viewportW - drawSize.X)),
+                std::clamp(Mouse.Y - DragOff.Y, 0.f, std::max(0.f, viewportH - drawSize.Y))
+            };
             *pos = WinPos;
 
             collapsePos = FVector2D{ WinPos.X + drawSize.X - btnSize, WinPos.Y };
@@ -1692,13 +1710,19 @@ namespace MonkeGUI
         bool  focused = false;
         float focusT = 0.f;
         float cursorBlink = 0.f;
-
-        int   heldKey = 0;
-        float heldTimer = 0.f;
-        float heldRepeat = 0.f;
     };
 
     static std::unordered_map<int, SearchBarState> gSearchBar;
+
+    static inline bool IsTextInputFocused()
+    {
+        for (const auto& entry : gSearchBar)
+        {
+            if (entry.second.focused)
+                return true;
+        }
+        return false;
+    }
 
     static inline bool SearchBar(const char* label, char* buf, int bufSize, float w = 220.f)
     {
@@ -1733,114 +1757,55 @@ namespace MonkeGUI
         bool changed = false;
         if (s.focused)
         {
-
-            auto TryAppend = [&](char c)
+            auto TryBackspace = [&]()
                 {
-                    if (s.len < bufSize - 1)
+                    if (s.len > 0)
                     {
-                        s.buf[s.len++] = c;
+                        --s.len;
+                        while (s.len > 0 &&
+                            (static_cast<unsigned char>(s.buf[s.len]) & 0xC0) == 0x80)
+                        {
+                            --s.len;
+                        }
                         s.buf[s.len] = '\0';
                         changed = true;
                     }
                 };
 
-            auto TryBackspace = [&]()
-                {
-                    if (s.len > 0)
-                    {
-                        s.buf[--s.len] = '\0';
-                        changed = true;
-                    }
-                };
-
-            bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-
-            struct VKMap { int vk; char lo; char hi; };
-            static const VKMap kmap[] = {
-                {'A','a','A'},{'B','b','B'},{'C','c','C'},{'D','d','D'},
-                {'E','e','E'},{'F','f','F'},{'G','g','G'},{'H','h','H'},
-                {'I','i','I'},{'J','j','J'},{'K','k','K'},{'L','l','L'},
-                {'M','m','M'},{'N','n','N'},{'O','o','O'},{'P','p','P'},
-                {'Q','q','Q'},{'R','r','R'},{'S','s','S'},{'T','t','T'},
-                {'U','u','U'},{'V','v','V'},{'W','w','W'},{'X','x','X'},
-                {'Y','y','Y'},{'Z','z','Z'},
-                {'0','0',')'},{'1','1','!'},{'2','2','@'},{'3','3','#'},
-                {'4','4','$'},{'5','5','%'},{'6','6','^'},{'7','7','&'},
-                {'8','8','*'},{'9','9','('},
-                {VK_SPACE,' ',' '},{VK_OEM_MINUS,'-','_'},
-                {VK_OEM_PERIOD,'.','>'},{VK_OEM_COMMA,',','<'},
-            };
-
-            const float kInitDelay = 0.40f;
-            const float kRepeatRate = 0.05f;
-            s.cursorBlink += gDT;
-
+            const int capacity = std::min(bufSize, static_cast<int>(sizeof(s.buf)));
+            for (size_t i = 0; i < PendingTextInput.size();)
             {
-                bool bsDown = (GetAsyncKeyState(VK_BACK) & 0x8000) != 0;
-                if (bsDown)
+                const unsigned char lead = static_cast<unsigned char>(PendingTextInput[i]);
+                int sequenceLength = lead < 0x80 ? 1 :
+                    (lead & 0xE0) == 0xC0 ? 2 :
+                    (lead & 0xF0) == 0xE0 ? 3 :
+                    (lead & 0xF8) == 0xF0 ? 4 : 1;
+
+                if (i + sequenceLength > PendingTextInput.size())
+                    sequenceLength = 1;
+                for (int j = 1; j < sequenceLength; ++j)
                 {
-                    if (s.heldKey != VK_BACK)
+                    if ((static_cast<unsigned char>(PendingTextInput[i + j]) & 0xC0) != 0x80)
                     {
-                        s.heldKey = VK_BACK;
-                        s.heldTimer = 0.f;
-                        s.heldRepeat = 0.f;
-                        TryBackspace();
-                    }
-                    else
-                    {
-                        s.heldTimer += gDT;
-                        if (s.heldTimer >= kInitDelay)
-                        {
-                            s.heldRepeat += gDT;
-                            while (s.heldRepeat >= kRepeatRate)
-                            {
-                                TryBackspace();
-                                s.heldRepeat -= kRepeatRate;
-                            }
-                        }
+                        sequenceLength = 1;
+                        break;
                     }
                 }
-                else if (s.heldKey == VK_BACK)
-                {
-                    s.heldKey = 0;
-                }
-            }
 
-            for (auto& km : kmap)
-            {
-                bool down = (GetAsyncKeyState(km.vk) & 0x8000) != 0;
-                if (down)
-                {
-                    char c = shift ? km.hi : km.lo;
-                    if (s.heldKey != km.vk)
-                    {
-                        s.heldKey = km.vk;
-                        s.heldTimer = 0.f;
-                        s.heldRepeat = 0.f;
-                        TryAppend(c);
-                    }
-                    else if (s.heldKey == km.vk)
-                    {
-                        s.heldTimer += gDT;
-                        if (s.heldTimer >= kInitDelay)
-                        {
-                            s.heldRepeat += gDT;
-                            while (s.heldRepeat >= kRepeatRate)
-                            {
-                                TryAppend(c);
-                                s.heldRepeat -= kRepeatRate;
-                            }
-                        }
-                    }
+                if (s.len + sequenceLength >= capacity)
                     break;
-                }
-                else if (s.heldKey == km.vk)
-                {
-                    s.heldKey = 0;
-                }
+                std::memcpy(s.buf + s.len, PendingTextInput.data() + i, sequenceLength);
+                s.len += sequenceLength;
+                s.buf[s.len] = '\0';
+                i += sequenceLength;
+                changed = true;
             }
 
-            if (GetAsyncKeyState(VK_ESCAPE) & 0x8000)
+            for (int i = 0; i < PendingBackspaces; ++i)
+                TryBackspace();
+
+            s.cursorBlink += gDT;
+            if (PendingEscape)
             {
                 if (s.len > 0) { s.len = 0; s.buf[0] = '\0'; changed = true; }
                 else s.focused = false;
@@ -1848,7 +1813,7 @@ namespace MonkeGUI
         }
 
         if (changed)
-            std::snprintf(buf, bufSize, "%s", s.buf);
+            std::snprintf(buf, std::min(bufSize, static_cast<int>(sizeof(s.buf))), "%s", s.buf);
 
         an.hoverT = ExpApproach(an.hoverT, hovered ? 1.f : 0.f, 18.f, gDT);
         an.activeT = ExpApproach(an.activeT, s.focused ? 1.f : 0.f, 22.f, gDT);
@@ -2021,7 +1986,11 @@ namespace MonkeGUI
 
     static inline void Render()
     {
-        if (!Canvas) return;
+        if (!Canvas)
+        {
+            ClearQueuedTextInput();
+            return;
+        }
 
         for (int i = 0; i < Post::n; i++)
         {
@@ -2042,5 +2011,6 @@ namespace MonkeGUI
             Active = -1;
 
         Post::Reset();
+        ClearQueuedTextInput();
     }
 }

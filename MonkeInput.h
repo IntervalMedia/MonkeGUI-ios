@@ -1,33 +1,41 @@
 #pragma once
-#include <Windows.h>
-#include "../includes.h"
-#include "../Game/Game.h"
-
-/* This is just zerogui input because im lazy yes */
 
 namespace ZeroGUI
 {
 	namespace Input
 	{
-		bool mouseDown[5];
-		bool mouseDownAlready[256];
+		inline bool mouseDown[5]{};
+		inline bool mouseDownAlready[256]{};
+		inline bool keysDown[256]{};
+		inline bool keysDownAlready[256]{};
 
-		bool keysDown[256];
-		bool keysDownAlready[256];
-
-		bool IsAnyMouseDown()
+		inline void SetMouseButtonState(int button, bool isDown)
 		{
-			if (mouseDown[0]) return true;
-			if (mouseDown[1]) return true;
-			if (mouseDown[2]) return true;
-			if (mouseDown[3]) return true;
-			if (mouseDown[4]) return true;
+			if (button >= 0 && button < 5)
+				mouseDown[button] = isDown;
+		}
 
+		inline void SetKeyState(int key, bool isDown)
+		{
+			if (key >= 0 && key < 256)
+				keysDown[key] = isDown;
+		}
+
+		inline bool IsAnyMouseDown()
+		{
+			for (bool isDown : mouseDown)
+			{
+				if (isDown)
+					return true;
+			}
 			return false;
 		}
 
-		bool IsMouseClicked(int button, int element_id, bool repeat)
+		inline bool IsMouseClicked(int button, int element_id, bool repeat)
 		{
+			if (button < 0 || button >= 5 || element_id < 0 || element_id >= 256)
+				return false;
+
 			if (mouseDown[button])
 			{
 				if (!mouseDownAlready[element_id])
@@ -35,17 +43,18 @@ namespace ZeroGUI
 					mouseDownAlready[element_id] = true;
 					return true;
 				}
-				if (repeat)
-					return true;
+				return repeat;
 			}
-			else
-			{
-				mouseDownAlready[element_id] = false;
-			}
+
+			mouseDownAlready[element_id] = false;
 			return false;
 		}
-		bool IsKeyPressed(int key, bool repeat)
+
+		inline bool IsKeyPressed(int key, bool repeat)
 		{
+			if (key < 0 || key >= 256)
+				return false;
+
 			if (keysDown[key])
 			{
 				if (!keysDownAlready[key])
@@ -53,22 +62,11 @@ namespace ZeroGUI
 					keysDownAlready[key] = true;
 					return true;
 				}
-				if (repeat)
-					return true;
+				return repeat;
 			}
-			else
-			{
-				keysDownAlready[key] = false;
-			}
-			return false;
-		}
 
-		void Handle()
-		{
-			if (GetAsyncKeyState(0x01))
-				mouseDown[0] = true;
-			else
-				mouseDown[0] = false;
+			keysDownAlready[key] = false;
+			return false;
 		}
 	}
 }
