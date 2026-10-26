@@ -36,21 +36,23 @@ Discord: aactor
 - Smooth animations on every widget (hover, press, open/close)
 - Window dragging and resizing
 - Collapsible windows
+- Touch and pointer input supplied by Unreal
 - Tabs, combo boxes, sliders, checkboxes, color picker, popups, search bar
 - Custom styling via `MonkeGUI::Style` namespace
-- UE4 / UE5 compatible
+- Unreal Engine 4 / 5 compatible, including iOS and Android targets
 
 ---
 
 ## Requirements
 
 - Unreal Engine 4 or 5
+- C++17 or newer
 - A valid `UCanvas*` (e.g. from `PostRender`)
 - A 1×1 white `UTexture*` (used for all filled rect rendering)
 - A `UFont*`
 - C++
 
-> **SDK note:** MonkeGUI references `FLinearColor`, `FVector2D`, `UCanvas`, `UTexture`, and `UFont` from your UE SDK headers. Make sure these are available in your include path before including `MonkeGUI.h`.
+MonkeGUI uses Unreal Engine headers and does not depend on Windows APIs, so the same source can be compiled for desktop, iOS, and Android Unreal targets.
 
 ---
 
@@ -63,8 +65,11 @@ Call these at the top of your render function, before any widgets:
 ```cpp
 MonkeGUI::SetWhiteTexture(myWhiteTexture); // 1x1 white UTexture*
 MonkeGUI::SetFont(myFont);                 // UFont*
-MonkeGUI::SetupCanvas(Canvas, DeltaTime);  // resets state, updates mouse
+MonkeGUI::SetPointerState(pointerPosition, pointerPressed); // touch or mouse state, in canvas coordinates
+MonkeGUI::SetupCanvas(Canvas, DeltaTime);  // resets state, updates pointer
 ```
+
+Call `SetPointerState` every frame before `SetupCanvas`. For touch, supply the primary finger's position and pressed state from Unreal input; convert the position to `UCanvas` coordinates if your viewport is scaled. Search-bar text is event-driven: send UTF-8 text with `QueueTextInput`, and call `QueueTextBackspace` or `QueueTextEscape` for those actions. Use `IsTextInputFocused()` to show or dismiss the platform on-screen keyboard from the host app.
 
 ### 2. Draw your UI
 
@@ -197,7 +202,7 @@ MonkeGUI::FX::SnowRender(DeltaTime, 0.85f); // call before Render()
 
 ## Known Limitations
 
-- **Windows only** — mouse input uses `GetAsyncKeyState` and `GetCursorPos`.
+- **Engine-provided input** — pointer and text events must be supplied by the host Unreal application; MonkeGUI does not poll platform input or open the on-screen keyboard.
 - **Single context** — all state is global; multiple simultaneous GUI contexts are not supported.
 - **Draw queue cap** — the post-render queue holds up to 2048 commands. Very complex layouts may silently drop commands.
 - **No scrolling** — windows and combo boxes do not scroll; content that overflows is clipped.

@@ -8,9 +8,10 @@ Lightweight animated immediate-mode GUI framework for Unreal Engine canvas rende
 
 1. [Overview](#overview)
 2. [Setup](#setup)
-3. [Core Concepts](#core-concepts)
-4. [Windows](#windows)
-5. [Widgets](#widgets)
+3. [Mobile and pointer input](#mobile-and-pointer-input)
+4. [Core Concepts](#core-concepts)
+5. [Windows](#windows)
+6. [Widgets](#widgets)
    - [Text](#text)
    - [Button](#button)
    - [Checkbox](#checkbox)
@@ -18,15 +19,15 @@ Lightweight animated immediate-mode GUI framework for Unreal Engine canvas rende
    - [Combo](#combo)
    - [ColorPicker](#colorpicker)
    - [Separator](#separator)
-6. [Tabs](#tabs)
-7. [Search Bar](#search-bar)
-8. [Popups](#popups)
-9. [Effects](#effects)
-10. [Watermark](#watermark)
-11. [Styling](#styling)
-12. [Drawing Utilities](#drawing-utilities)
-13. [ID System](#id-system)
-14. [Render Loop](#render-loop)
+7. [Tabs](#tabs)
+8. [Search Bar](#search-bar)
+9. [Popups](#popups)
+10. [Effects](#effects)
+11. [Watermark](#watermark)
+12. [Styling](#styling)
+13. [Drawing Utilities](#drawing-utilities)
+14. [ID System](#id-system)
+15. [Render Loop](#render-loop)
 
 ---
 
@@ -34,7 +35,7 @@ Lightweight animated immediate-mode GUI framework for Unreal Engine canvas rende
 
 MonkeGUI is an immediate-mode GUI library inspired by [Dear ImGui](https://github.com/ocornut/imgui), built specifically for rendering on top of Unreal Engine's `UCanvas`. It requires no external GUI dependencies and is compatible with UE4 and UE5.
 
-All widgets are drawn via a deferred command queue and flushed in a single `Render()` call at the end of each frame. Animations are driven by exponential smoothing for a polished, responsive feel.
+All widgets are drawn via a deferred command queue and flushed in a single `Render()` call at the end of each frame. Animations are driven by exponential smoothing for a polished, responsive feel. The header uses Unreal Engine APIs only and supports desktop, iOS, and Android Unreal targets.
 
 ---
 
@@ -47,10 +48,28 @@ Call these at the start of your render function, before any widgets:
 ```cpp
 MonkeGUI::SetWhiteTexture(myWhiteTexture); // a 1x1 white UTexture*
 MonkeGUI::SetFont(myFont);                 // a UFont*
+MonkeGUI::SetPointerState(pointerPosition, pointerPressed);
 MonkeGUI::SetupCanvas(Canvas, DeltaTime);  // UCanvas* and frame delta time
 ```
 
-`SetupCanvas` resets the draw queue, updates mouse state, and clamps `DeltaTime` to a safe range (1/240 – 1/15 seconds).
+Call `SetPointerState` each frame before `SetupCanvas`. `SetupCanvas` resets the draw queue, updates pointer state, and clamps `DeltaTime` to a safe range (1/240 – 1/15 seconds).
+
+### Mobile and pointer input
+
+MonkeGUI does not poll the operating system for mouse or keyboard state. The host Unreal application supplies the primary pointer position and pressed state, which can represent either a mouse or a touch:
+
+```cpp
+float touchX = 0.f;
+float touchY = 0.f;
+bool isTouching = false;
+PlayerController->GetInputTouchState(
+    ETouchIndex::Touch1, touchX, touchY, isTouching);
+MonkeGUI::SetPointerState(touchX, touchY, isTouching);
+```
+
+Pass coordinates in the same space as `UCanvas`; map viewport-scaled touch coordinates to canvas coordinates in the host if necessary. The default title bar, rows, and input frames are sized for touch, and windows are constrained to the canvas bounds.
+
+`SearchBar` receives text through input events. Send UTF-8 text with `QueueTextInput`, and send backspace or escape events with `QueueTextBackspace` or `QueueTextEscape` before `Render()`. Query `IsTextInputFocused()` to show or dismiss the iOS or Android on-screen keyboard from the host; MonkeGUI itself does not invoke platform keyboard APIs.
 
 ### End of frame
 
@@ -116,7 +135,7 @@ Returns `true` when the window is visible and widgets should be submitted. Retur
 
 The window supports:
 - **Dragging** via the title bar.
-- **Resizing** via the grip in the bottom-right corner (minimum size: 220 × 120).
+- **Resizing** via the grip in the bottom-right corner (minimum size: 220 × 120, limited by the canvas size).
 - **Collapsing** via the chevron button in the top-right (when `collapsed` is provided).
 
 ### `End`
